@@ -1,0 +1,94 @@
+---
+stages:
+- name: Build
+  inputs:
+  - url: https://github.com/jedward19/keyprotectjwtutil.git
+    type: git
+    branch: master
+    dir_name: null
+  properties:
+  - name: KeyCupsService
+    value: MyKeyCups
+    type: text
+  - name: KeyName
+    value: MyKey1
+    type: text
+  jobs:
+  - name: Build
+    type: builder
+    artifact_dir: ''
+- name: Deploy to Dev
+  inputs:
+  - type: job
+    stage: Build
+    job: Build
+    dir_name: null
+  properties:
+  - name: KeyCupsService
+    value: MyKeyService
+    type: text
+  - name: KeyName
+    value: MyKey
+    type: text
+  - name: ProtectKeyService
+    value: Protect-key-service
+    type: text
+  jobs:
+  - name: GenerateUpdateKey
+    type: deployer
+    target:
+      region_id: ibm:yp:us-south
+      organization: AA-CustTech-FLY
+      space: dev
+      application: key-protect
+    script: |
+      #!/bin/bash
+      #doubl check the cloned project
+      ls -la
+      #check if the protect key service exists
+      cf services | grep -iw ibm_key_management
+      if [ ! $? -eq 0 ]  #create it if not there
+      then
+          cf create-service ibm_key_management TieredPricing $ProtectKeyService
+      else
+          echo "protect key service exists!"
+      fi
+      export PATH="$NODE6_2_2_HOME/bin:$PATH"
+      export NODE_DEBUG=kjwt
+      npm start -- CreateUpdate_JWT "$KeyName" "$KeyCupsService"
+- name: Deploy to iqa
+  inputs:
+  - type: job
+    stage: Build
+    job: Build
+    dir_name: null
+  properties:
+  - name: KeyCupsService
+    value: MyKeyService
+    type: text
+  - name: KeyName
+    value: MyKey
+    type: text
+  - name: ProtectKeyService
+    value: Protect-key-service
+    type: text
+  jobs:
+  - name: GenerateUpdateKey
+    type: deployer
+    target:
+      region_id: ibm:yp:us-south
+      organization: AA-CustTech-FLY
+      space: iqa
+      application: key-protect
+    script: "#!/bin/bash\n#doubl check the cloned project\nls -la\n#check if the protect\
+      \ key service exists\ncf services | grep -iw ibm_key_management\nif [ ! $? -eq\
+      \ 0 ]  #create it if not there\nthen \n    echo \"here?\"\n    cf create-service\
+      \ ibm_key_management TieredPricing $ProtectKeyService\nelse\n    echo \"protect\
+      \ key service exists!\"\nfi\nexport PATH=\"$NODE6_2_2_HOME/bin:$PATH\"\nexport\
+      \ NODE_DEBUG=kjwt\nnpm start -- CreateUpdate_JWT \"$KeyName\" \"$KeyCupsService\"\
+      \n"
+hooks:
+- enabled: true
+  label: null
+  ssl_enabled: false
+  url: https://devops-api.ng.bluemix.net/v1/messaging/webhook/publish
